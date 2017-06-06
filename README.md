@@ -1,3 +1,5 @@
+NOTE: This branch is for dev purposes only (the data is only for one location and is not live)
+
 # API server for LLogger android app
 Returns the current road conditions at a coordinate.
 
