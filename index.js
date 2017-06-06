@@ -3,6 +3,7 @@
 const Hapi = require('hapi');
 const Joi = require('joi');
 
+// coordinates will be stored in way that are easy to look up
 const cacheCoord = ({lat, lng}) => `${lat},${lng}`;
 
 const cache = {
@@ -16,11 +17,15 @@ const getSunTimes = ({lat, lng}) => {
 };
 
 const getLight = ({lat, lng}) => {
-
+  return new Promise((res, rej) => {
+    res(null);
+  });
 };
 
+// find the closes station
 const getClosesStation = (coord) => {
   return new Promise((res, rej) => {
+    // look in cache
     const cachedStation = cache.station[cacheCoord(coord)];
     if (typeof cachedStation != 'undefined') {
       console.log(`cached: ${cachedStation}`);
@@ -38,8 +43,10 @@ const getClosesStation = (coord) => {
   });
 };
 
+// get rainfall of a station
 const getRainfall = (station) => {
   return new Promise((res, rej) => {
+    // look in cache
     const cachedRainfall = cache.rainfall[station];
     if (typeof cachedRainfall != 'undefined' && cachedRainfall.expire > (Date.now() / 1000)) {
       console.log(`cached: ${cachedRainfall.value}`);
@@ -60,11 +67,14 @@ const getRainfall = (station) => {
   });
 }
 
+// get wetnees of a location
 const getWetness = (coord) => {
   return new Promise((res, rej) => {
+    // chain getting station and getting rainfall
     getClosesStation(coord)
       .then((station) => getRainfall(station))
       .then((rainfall) => {
+        // 20 is an arbitrary number for now
         if (rainfall > 20) {
           res(true);
           return;
@@ -84,7 +94,7 @@ server.connection({
   port: 8000
 });
 
-// Add the route
+// Add driving condition route
 server.route({
   method: 'GET',
   path:'/drive_conditions',
@@ -101,18 +111,25 @@ server.route({
       lng: req.query.lng.toFixed(1)
     };
     const response = {
+      query: req.query,
       sunCoord,
       rainCoord
     };
 
-    // find the closes station
+    // need both light and wetness
     Promise.all([
-      getLight(sunCoord),
-      getWetness(rainCoord)
+      getLight(sunCoord).then((light) => ({light})),
+      getWetness(rainCoord).then((wet) => ({wet}))
     ])
-      .then((response) => {
-        Object.assign(response, {response});
+      .then((conditions) => {
+        // add conditions to response
+        conditions.reduce((acc, item) => {
+          return Object.assign(acc, item);
+        }, response);
+
+        console.log(response);
         reply(response);
+        return;
       });
     return;
   },
