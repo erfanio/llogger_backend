@@ -3,71 +3,52 @@
 const Hapi = require('hapi');
 const Joi = require('joi');
 const Axios = require('axios');
+const SunCalc = require('suncalc');
 
 // coordinates will be stored in way that are easy to look up
 const cacheCoord = ({lat, lng}) => `${lat},${lng}`;
 
 const cache = {
-  sun:  {},
   rainfall: {},
   station: {}
 };
 
 // get the sun times for the location
-const getSunTimes = (coord) => {
-  return new Promise((res, rej) => {
-    // look in cache
-    const cachedSun = cache.sun[cacheCoord(coord)];
-    if (typeof cachedSun != 'undefined') {
-      console.log(`cached: sun`);
-      res(cachedSun);
-      return;
-    }
-    // do work
-    const sun = {
-      dawn: 1496692800,
-      day: 1496696400,
-      dusk: 1496732400,
-      night: 1496734800
-    };
-    console.log(`add to cache: sun`);
-    cache.sun[cacheCoord(coord)] = sun;
+const getSunTimes = ({lat, lng}) => {
+  // calculate the sun times
+  const times = SunCalc.getTimes(Date.now(), lat, lng);
+  // convert to timestamp
+  return Object.keys(times).reduce((acc, key) => {
+    acc[key] = times[key].getTime() / 1000;
+    return acc;
+  }, {});
 
-    res(sun);
-    return;
-  })
-  .catch((err) => {
-    console.log(err);
-    rej('Error in getSunTimes');
-    return;
-  });
 };
 
 // get light status of the location
 const getLight = (coord) => {
-  return new Promise((res, rej) => {
-    getSunTimes(coord)
-      .then(({dawn, day, dusk, night}) => {
-        const now = Date.now() / 1000;
-        if (now < dawn) {
-          res('night');
-        } else if (now < day) {
-          res('dawn/dusk');
-        } else if (now < dusk) {
-          res('day');
-        } else if (now < night) {
-          res('dawn/dusk');
-        } else {
-          res('night');
-        }
-        return;
-      })
-      .catch((err) => {
-        console.log(err);
-        rej('Error in getLight');
-        return;
-      });
-  });
+  const {
+    dawn,
+    sunriseEnd: day,
+    sunsetStart: dusk,
+    dusk: night
+  } = getSunTimes(coord);
+
+  const now = Date.now() / 1000;
+  // before dawn is night, and etc. etc.
+  if (now < dawn) {
+    return 'night';
+  }
+  if (now < day) {
+    return 'dawn/dusk';
+  }
+  if (now < dusk) {
+    return 'day';
+  }
+  if (now < night) {
+    return 'dawn/dusk';
+  }
+  return 'night';
 };
 
 // find the closes station
@@ -153,32 +134,23 @@ server.route({
   path:'/drive_conditions',
   handler: function (req, reply) {
     console.log(cache);
-    // construct coordinates for getting sunset/sunrise
-    const sunCoord = {
-      lat: Math.floor(req.query.lat),
-      lng: Math.floor(req.query.lng)
-    };
-    // construct more accurate coordinates for getting rainfall
-    const rainCoord = {
+
+    const coord = {
       lat: req.query.lat.toFixed(1),
       lng: req.query.lng.toFixed(1)
     };
     const response = {
-      query: req.query,
-      sunCoord,
-      rainCoord
+      statusCode: 200,
+      coord
     };
 
-    // need both light and wetness
-    Promise.all([
-      getLight(sunCoord).then((light) => ({light})),
-      getWetness(rainCoord).then((wet) => ({wet}))
-    ])
-      .then((conditions) => {
+    getWetness(coord)
+      .then((wet) => {
         // add conditions to response
-        conditions.reduce((acc, item) => {
-          return Object.assign(acc, item);
-        }, response);
+        Object.assign(response, {
+          light: getLight(coord),
+          wet
+        });
 
         console.log(response);
         reply(response);
