@@ -5,6 +5,8 @@ const Joi = require('joi');
 const Axios = require('axios');
 const SunCalc = require('suncalc');
 
+const apiSnippet = require('./api_snippet');
+
 const willy_key = process.env.WILLY_KEY;
 
 // coordinates will be stored as a string to make them easy to look up
@@ -54,7 +56,13 @@ const getLight = (coord) => {
 
 // api for searching for stations based on coordinates
 const searchStationApi = ({lat, lng}) => {
-  return Axios.get(`https://api.willyweather.com.au/v2/${willy_key}/search.json?lat=${lat}&lng=${lng}&units=distance:km`)
+  return new Promise((res, rej) => {
+    res({
+      status: 200,
+      data: apiSnippet.station
+    });
+    return;
+  })
     .then((res) => {
       if (res.status == 200) {
         return res.data;
@@ -98,7 +106,13 @@ const getClosestStation = (coord) => {
 
 // api for getting weather information of a station
 const getWeatherApi = (station) => {
-  return Axios.get(`https://api.willyweather.com.au/v2/${willy_key}/locations/${station}/weather.json?observational=true`)
+  return new Promise((res, rej) => {
+    res({
+      status: 200,
+      data: apiSnippet.weather
+    });
+    return;
+  })
     .then((res) => {
       if (res.status == 200) {
         return res.data;
