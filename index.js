@@ -2,6 +2,7 @@
 
 const Hapi = require('hapi');
 const Joi = require('joi');
+const Axios = require('axios');
 
 // coordinates will be stored in way that are easy to look up
 const cacheCoord = ({lat, lng}) => `${lat},${lng}`;
@@ -12,6 +13,7 @@ const cache = {
   station: {}
 };
 
+// get the sun times for the location
 const getSunTimes = (coord) => {
   return new Promise((res, rej) => {
     // look in cache
@@ -33,9 +35,15 @@ const getSunTimes = (coord) => {
 
     res(sun);
     return;
+  })
+  .catch((err) => {
+    console.log(err);
+    rej('Error in getSunTimes');
+    return;
   });
 };
 
+// get light status of the location
 const getLight = (coord) => {
   return new Promise((res, rej) => {
     getSunTimes(coord)
@@ -52,6 +60,11 @@ const getLight = (coord) => {
         } else {
           res('night');
         }
+        return;
+      })
+      .catch((err) => {
+        console.log(err);
+        rej('Error in getLight');
         return;
       });
   });
@@ -117,6 +130,11 @@ const getWetness = (coord) => {
         res(false);
         return;
       })
+      .catch((err) => {
+        console.log(err);
+        rej('Error in getWetness');
+        return;
+      });
     return;
   });
 
@@ -165,6 +183,11 @@ server.route({
         console.log(response);
         reply(response);
         return;
+      })
+      .catch((err) => {
+        // console.log(req);
+        console.log(err);
+        reply(new Error());
       });
     return;
   },
