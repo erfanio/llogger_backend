@@ -1,0 +1,17 @@
+{
+  "name": "llogger-backend",
+  "version": "0.1",
+  "description": "Server code for LLogger app to get weather and other data",
+  "main": "index.js",
+  "author": "erfanio",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.16.2",
+    "hapi": "^16.4.0",
+    "joi": "^10.5.2"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  }
+}
