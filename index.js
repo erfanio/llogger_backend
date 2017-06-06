@@ -5,7 +5,9 @@ const Joi = require('joi');
 const Axios = require('axios');
 const SunCalc = require('suncalc');
 
-// coordinates will be stored in way that are easy to look up
+const willy_key = process.env.WILLY_KEY;
+
+// coordinates will be stored as a string to make them easy to look up
 const cacheCoord = ({lat, lng}) => `${lat},${lng}`;
 
 const cache = {
@@ -22,7 +24,6 @@ const getSunTimes = ({lat, lng}) => {
     acc[key] = times[key].getTime() / 1000;
     return acc;
   }, {});
-
 };
 
 // get light status of the location
@@ -51,8 +52,21 @@ const getLight = (coord) => {
   return 'night';
 };
 
+// api for searching for stations based on coordinates
+const searchStationApi = ({lat, lng}) => {
+  return Axios.get(`https://api.willyweather.com.au/v2/${willy_key}/search.json?lat=${lat}&lng=${lng}&units=distance:km`)
+    .then((res) => {
+      if (res.status == 200) {
+        return res.data;
+      }
+
+      console.log(res);
+      throw new Error(`Willy Weather API failed while getting closest station to ${lat}, ${lng}`);
+    });
+};
+
 // find the closes station
-const getClosesStation = (coord) => {
+const getClosestStation = (coord) => {
   return new Promise((res, rej) => {
     // look in cache
     const cachedStation = cache.station[cacheCoord(coord)];
@@ -61,15 +75,37 @@ const getClosesStation = (coord) => {
       res(cachedStation);
       return;
     }
-    // do work
-    const station = 123;
-    // cache the data
-    console.log(`add to cache: ${station}`);
-    cache.station[cacheCoord(coord)] = station;
 
-    res(station);
+    // hit the api to find the closest station
+    searchStationApi(coord)
+      .then((data) => data.location.id)
+      .then((station) => {
+        // cache the data
+        console.log(`add to cache: ${station}`);
+        cache.station[cacheCoord(coord)] = station;
+
+        res(station);
+        return;
+      })
+      .catch((err) => {
+        console.error(err);
+        rej('Error in getClosestStation');
+        return;
+      });
     return;
   });
+};
+
+// api for getting weather information of a station
+const getWeatherApi = (station) => {
+  return Axios.get(`https://api.willyweather.com.au/v2/${willy_key}/locations/${station}/weather.json?observational=true`)
+    .then((res) => {
+      if (res.status == 200) {
+        return res.data;
+      }
+      console.log(res);
+      throw new Error(`Willy Weather API failed while getting weather data from station ${station}`);
+    });
 };
 
 // get rainfall of a station
@@ -82,16 +118,21 @@ const getRainfall = (station) => {
       res(cachedRainfall.value);
       return;
     }
-    // do work
-    const rainfall = 22;
-    // cache the data
-    console.log(`add to cache: ${rainfall}`);
-    cache.rainfall[station] = {
-      value: rainfall,
-      expire: (Date.now() / 1000) + 3600
-    };
 
-    res(rainfall);
+    // hit the api to get weather info for the station
+    getWeatherApi(station)
+      .then((data) => data.observational.observations.rainfall.todayAmount)
+      .then((rainfall) => {
+        // cache the data (expires in an hour)
+        console.log(`add to cache: ${rainfall}`);
+        cache.rainfall[station] = {
+          value: rainfall,
+          expire: (Date.now() / 1000) + 3600
+        };
+
+        res(rainfall);
+        return;
+      });
     return;
   });
 }
@@ -100,11 +141,10 @@ const getRainfall = (station) => {
 const getWetness = (coord) => {
   return new Promise((res, rej) => {
     // chain getting station and getting rainfall
-    getClosesStation(coord)
+    getClosestStation(coord)
       .then((station) => getRainfall(station))
       .then((rainfall) => {
-        // 20 is an arbitrary number for now
-        if (rainfall > 20) {
+        if (rainfall > 0) {
           res(true);
           return;
         }
@@ -112,7 +152,7 @@ const getWetness = (coord) => {
         return;
       })
       .catch((err) => {
-        console.log(err);
+        console.error(err);
         rej('Error in getWetness');
         return;
       });
@@ -157,8 +197,8 @@ server.route({
         return;
       })
       .catch((err) => {
-        // console.log(req);
-        console.log(err);
+        console.log(req);
+        console.error(err);
         reply(new Error());
       });
     return;
