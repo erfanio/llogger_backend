@@ -12,13 +12,48 @@ const cache = {
   station: {}
 };
 
-const getSunTimes = ({lat, lng}) => {
+const getSunTimes = (coord) => {
+  return new Promise((res, rej) => {
+    // look in cache
+    const cachedSun = cache.sun[cacheCoord(coord)];
+    if (typeof cachedSun != 'undefined') {
+      console.log(`cached: sun`);
+      res(cachedSun);
+      return;
+    }
+    // do work
+    const sun = {
+      dawn: 1496692800,
+      day: 1496696400,
+      dusk: 1496732400,
+      night: 1496734800
+    };
+    console.log(`add to cache: sun`);
+    cache.sun[cacheCoord(coord)] = sun;
 
+    res(sun);
+    return;
+  });
 };
 
-const getLight = ({lat, lng}) => {
+const getLight = (coord) => {
   return new Promise((res, rej) => {
-    res(null);
+    getSunTimes(coord)
+      .then(({dawn, day, dusk, night}) => {
+        const now = Date.now() / 1000;
+        if (now < dawn) {
+          res('night');
+        } else if (now < day) {
+          res('dawn/dusk');
+        } else if (now < dusk) {
+          res('day');
+        } else if (now < night) {
+          res('dawn/dusk');
+        } else {
+          res('night');
+        }
+        return;
+      });
   });
 };
 
