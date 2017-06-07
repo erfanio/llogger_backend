@@ -29,13 +29,13 @@ const getSunTimes = ({lat, lng}) => {
 };
 
 // get light status of the location
-const getLight = (coord) => {
+const getLight = (sun) => {
   const {
     dawn,
     sunriseEnd: day,
     sunsetStart: dusk,
     dusk: night
-  } = getSunTimes(coord);
+  } = sun;
 
   const now = Date.now() / 1000;
   // before dawn is night, and etc. etc.
@@ -200,9 +200,12 @@ server.route({
 
     getWetness(coord)
       .then((wet) => {
+        const sun = getSunTimes(coord);
         // add conditions to response
         Object.assign(response, {
-          light: getLight(coord),
+          dayStart: Math.floor(sun.dawn),
+          dayEnd: Math.floor(sun.night),
+          light: getLight(sun),
           wet
         });
 
